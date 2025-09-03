@@ -114,8 +114,8 @@ export async function joinCall(callId) {
     };
 
     // Listen for caller ICE
-    listenForIceCandidates(callId, false, async candidate => {
+    listenForIceCandidates(callId, true, async candidate => {
         await peerConnection.addIceCandidate(candidate);
-    });
+    });    
 
 }
