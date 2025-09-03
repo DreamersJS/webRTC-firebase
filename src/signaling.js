@@ -40,7 +40,7 @@ export const listenForIceCandidates = (callId, isCaller, callback) => {
     });
 };
 
-export const deleteTableRow = async () => {
+export const deleteTableRow = async (callId) => {
     await remove(ref(db, `calls/${callId}`));
     return { message: "Call ended and data removed from database." };
 };
