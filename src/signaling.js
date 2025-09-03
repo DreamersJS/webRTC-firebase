@@ -97,7 +97,7 @@ export async function startCall() {
 export async function joinCall(callId) {
 
     // Get offer
-    const offer = getOfferFromDb(callId);
+    const offer = await getOfferFromDb(callId);
     await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
 
     // Create answer
