@@ -7,8 +7,7 @@ export const createTable = async () => {
 };
 
 export const createTableRow = async () => {
-    // const newCallRef = push(callsRef);
-    const newCallRef = push(ref(db, "calls"));  // auto-ID
+    const newCallRef = push(ref(db, "calls"));
     const callId = newCallRef.key;
     return callId;
 };
@@ -23,41 +22,23 @@ export const addAnswerToDb = async (callId, answer) => {
 
 export const listenForAnswer = (callId, callback) => {
     onValue(ref(db, `calls/${callId}/answer`), async snapshot => {
-      const answer = snapshot.val();
-      if (answer) callback(answer);
+        const answer = snapshot.val();
+        if (answer) callback(answer);
     });
-  };  
+};
 
 export const addIceCandidateToDb = async (callId, candidate, isCaller) => {
     const candidatePath = isCaller ? `calls/${callId}/callerCandidates` : `calls/${callId}/calleeCandidates`;
     await push(ref(db, candidatePath), candidate.toJSON());
 }
-/**
- * 
-Can't Returning Values from Listeners
 
-onValue and onChildAdded don’t work with return.
-
-They’re event listeners, not promises — so your current return candidate; inside listenForIceCandidates won’t actually return anything to the caller.
-
-Fix: You should provide a callback or use Promise wrapping. 
-export const listenForIceCandidates = async (callId, isCaller) => {
-    const candidatePath = isCaller ? `calls/${callId}/calleeCandidates` : `calls/${callId}/callerCandidates`;
-    onChildAdded(ref(db, candidatePath), async snapshot => {
-        const candidate = snapshot.val();
-        return candidate;
-    }
-    );
-};
-*/
 export const listenForIceCandidates = (callId, isCaller, callback) => {
     const candidatePath = isCaller ? `calls/${callId}/calleeCandidates` : `calls/${callId}/callerCandidates`;
     onChildAdded(ref(db, candidatePath), snapshot => {
-      const candidate = snapshot.val();
-      callback(new RTCIceCandidate(candidate));
+        const candidate = snapshot.val();
+        callback(new RTCIceCandidate(candidate));
     });
-  };
-  
+};
 
 export const deleteTableRow = async () => {
     await remove(ref(db, `calls/${callId}`));
@@ -95,30 +76,25 @@ export async function startCall() {
     // Listen for answer
     listenForAnswer(callId, async answer => {
         if (!peerConnection.currentRemoteDescription) {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         }
-      });
+    });
 
     // Send caller ICE
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
             addIceCandidateToDb(callId, event.candidate, true);
-            // push(ref(db, `calls/${callId}/callerCandidates`), event.candidate.toJSON());
         }
     };
 
     // Listen for callee ICE
-    /**
-    const candidate = await listenForIceCandidates(callId, false);
-    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-     */
     listenForIceCandidates(callId, false, async candidate => {
         await peerConnection.addIceCandidate(candidate);
-      });      
+    });
 
 }
 
-async function joinCall(callId) {
+export async function joinCall(callId) {
 
     // Get offer
     const offer = getOfferFromDb(callId);
@@ -134,13 +110,12 @@ async function joinCall(callId) {
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
             addIceCandidateToDb(callId, event.candidate, false);
-            // push(ref(db, `calls/${callId}/calleeCandidates`), event.candidate.toJSON());
         }
     };
 
     // Listen for caller ICE
     listenForIceCandidates(callId, false, async candidate => {
         await peerConnection.addIceCandidate(candidate);
-      });
-      
+    });
+
 }
