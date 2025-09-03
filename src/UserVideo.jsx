@@ -1,17 +1,23 @@
 import { useEffect, useRef } from "react";
+import { attachLocalStream } from "./server";
 
 export default function UserVideo() {
   const videoRef = useRef(null);
   const streamRef = useRef(null); // keep a reference to stop it later
 
   useEffect(() => {
+    let stream;
+
     const initStream = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        streamRef.current = stream; // save it for cleanup
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        streamRef.current = stream;
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+            videoRef.current.srcObject = stream;
         }
+
+        // Attach to peer connection
+        attachLocalStream(stream);
       } catch (err) {
         console.error("Error accessing camera:", err);
       }
@@ -19,7 +25,6 @@ export default function UserVideo() {
 
     initStream();
 
-    // Cleanup function: runs when component unmounts
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
