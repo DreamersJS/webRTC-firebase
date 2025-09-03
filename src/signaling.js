@@ -21,12 +21,12 @@ export const addAnswerToDb = async (callId, answer) => {
     await set(ref(db, `calls/${callId}/answer`), answer);
 };
 
-export const listenForAnswer = async (callId) => {
+export const listenForAnswer = (callId, callback) => {
     onValue(ref(db, `calls/${callId}/answer`), async snapshot => {
-        const answer = snapshot.val();
-        return answer;
+      const answer = snapshot.val();
+      if (answer) callback(answer);
     });
-};
+  };  
 
 export const addIceCandidateToDb = async (callId, candidate, isCaller) => {
     const candidatePath = isCaller ? `calls/${callId}/callerCandidates` : `calls/${callId}/calleeCandidates`;
@@ -93,13 +93,11 @@ export async function startCall() {
     await addOfferToDb(callId, offer);
 
     // Listen for answer
-    await listenForAnswer(callId);
-    onValue(ref(db, `calls/${callId}/answer`), async snapshot => {
-        const answer = snapshot.val();
-        if (answer && !peerConnection.currentRemoteDescription) {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+    listenForAnswer(callId, async answer => {
+        if (!peerConnection.currentRemoteDescription) {
+          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         }
-    });
+      });
 
     // Send caller ICE
     peerConnection.onicecandidate = (event) => {
