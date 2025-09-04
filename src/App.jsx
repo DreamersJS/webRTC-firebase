@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route, useParams } from "react-router-dom";
-import { AppContextProvider } from './AppContext';
+import { AppContextProvider } from './login/AppContext';
 import './App.css'
 import Home from './Home'
 import { Register } from './login/Register';

@@ -1,3 +1,5 @@
+import { addAnswerToDb, addIceCandidateToDb, addOfferToDb, createTable, createTableRow, getOfferFromDb, listenForAnswer, listenForIceCandidates } from "./firebaseFuncs";
+import { peerConnection } from "./server";
 
 // create table for calls db, "calls" on first call
 export const firstCallSetup = async () => {
@@ -34,7 +36,8 @@ export async function startCall() {
     listenForIceCandidates(callId, false, async candidate => {
         await peerConnection.addIceCandidate(candidate);
     });
-
+    
+    return callId;
 }
 
 export async function joinCall(callId) {

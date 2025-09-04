@@ -1,6 +1,7 @@
 import React, { useContext, useState } from "react";
 import { AppContext } from "./AppContext";
 import { loginUser } from "./auth.service";
+import { getUserByUid } from "./users.service";
 
 export function Login() {
 
@@ -17,7 +18,9 @@ export function Login() {
     try {
       console.log("Logging in...");
       const credentials = await loginUser(form.email, form.password);
-      setUser(credentials.user);
+      const u = await getUserByUid(credentials.user.uid);
+      // console.log({u});
+      setUser(u);
     } catch (error) {
       console.log(error);
     }
@@ -34,7 +37,7 @@ export function Login() {
 
     {/* password */}
     <div className="mb-5">
-      <label > Email </label>
+      <label > password </label>
       <input value={form.password} onChange={updateForm("password")} type="text" />
     </div>
 

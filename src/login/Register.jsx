@@ -38,7 +38,7 @@ export function Register() {
     <div className="flex flex-col">
       {/* username */}
       <div className="mb-5">
-        <label > Email </label>
+        <label > username </label>
         <input value={form.username} onChange={updateForm("username")} type="text" />
       </div>
 
@@ -50,7 +50,7 @@ export function Register() {
 
       {/* password */}
       <div className="mb-5">
-        <label > Email </label>
+        <label > password </label>
         <input value={form.password} onChange={updateForm("password")} type="text" />
       </div>
 

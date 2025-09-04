@@ -1,4 +1,4 @@
-import { ref, set, push, onChildAdded, onValue, remove, get } from "firebase/database";
+import { ref, set, push, onChildAdded, onValue, remove, get, off } from "firebase/database";
 import { db } from "./firebase";
 
 export const createTable = async () => {
@@ -56,3 +56,60 @@ export const getAnswerFromDb = async (callId) => {
     const answer = answerSnapshot.val();
     return answer;
 };
+
+export const addIncomingToDb = async (callId, callerId, callerName, calleeId) => {
+    const incomingCallRef = push(ref(db, `users/${calleeId}/incomingCall`));
+    await set(incomingCallRef, {
+        callId,
+        callerId,
+        callerName,
+        accepted: null,
+    });
+    return incomingCallRef.key;
+}
+
+// export const listenForIncomingCall = (calleeId, callback) => {
+//     onValue(ref(db, `users/${calleeId}/incomingCall`), async snapshot => {
+//         const incoming = snapshot.val();
+//         if (incoming) callback(incoming);
+//     });
+// };
+
+export const listenForIncomingCall = (calleeId, callback) => {
+    const refPath = ref(db, `users/${calleeId}/incomingCall`);
+    const unsubscribe = onChildAdded(refPath, (snapshot) => {
+        const callKey = snapshot.key;
+        const callVal = snapshot.val();
+
+        // Fetch the full metadata if needed, but for now just pass it
+        callback({ ...callVal }, callKey);
+    });
+
+    return () => off(refPath); // so you can clean up in Home.jsx
+};
+
+//Add a new listenForCallStatus for the caller
+export const listenForCallStatus = (calleeId, callKey, callback) => {
+    const statusRef = ref(db, `users/${calleeId}/incomingCall/${callKey}/accepted`);
+    const unsubscribe = onValue(statusRef, (snapshot) => {
+        const status = snapshot.val(); // true, false, or null
+        callback(status);
+    });
+
+    return () => off(statusRef);
+};
+
+
+
+export const addAcceptCallToDb = async (calleeId, callKey) => {
+    await set(ref(db, `users/${calleeId}/incomingCall/${callKey}/accepted`), true);
+}
+export const addRejectCallToDb = async (calleeId, callKey) => {
+    await set(ref(db, `users/${calleeId}/incomingCall/${callKey}/accepted`), false);
+}
+
+export const removeIncoming = async (calleeId, callKey) => {
+    await remove(ref(db, `users/${calleeId}/incomingCall/${callKey}`));
+    return { message: "Incoming call data removed from database." };
+}
+

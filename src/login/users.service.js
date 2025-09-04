@@ -1,5 +1,5 @@
 import { get, set, ref, query} from "firebase/database";
-import { db } from "./firebase-config";
+import { db } from "../firebase";
 
 export const getAllUsers = async () => {
   const snapshot = await get(query(ref(db, "users")));
@@ -26,13 +26,7 @@ export const createUserProfile = (
   uid,
   username,
   email,
-  phoneNumber,
   password,
-  role = "user",
-  status,
-  friendsList,
-  sentRequests,
-  pendingRequests
 ) => {
   const readableDate = new Date();
 
@@ -41,17 +35,6 @@ export const createUserProfile = (
     username,
     email,
     password,
-    phoneNumber,
-    createdOnReadable: readableDate,
-    role,
-    status,
-    friendsList,
-    sentRequests,
-    pendingRequests,
-    profilePhotoURL: "",
-    profileBackgroundURL: "",
-    fileURL: "",
-    location: "",
   });
 };
 

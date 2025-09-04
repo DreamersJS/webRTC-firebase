@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { listenForRemoteTracks } from "./server";
+import { listenForRemoteTracks, peerConnection } from "./server";
 
 export default function RemoteVideo() {
   const videoRef = useRef(null);

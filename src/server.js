@@ -5,13 +5,17 @@ const servers = {
     ],
 };
 
+export function createPeerConnection() {
+    return new RTCPeerConnection(servers);
+}
+
 export let peerConnection = new RTCPeerConnection(servers);
 
 export const attachLocalStream = (stream) => {
     stream.getTracks().forEach((track) => {
-      peerConnection.addTrack(track, stream);
+        peerConnection.addTrack(track, stream);
     });
-  };
+};
 
 export function listenForRemoteTracks(onRemoteStream) {
     const remoteStream = new MediaStream();
