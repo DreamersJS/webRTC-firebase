@@ -58,6 +58,7 @@ This means both the server module and the React component share the same MediaSt
 
 https://chatgpt.com/c/68b422a5-d988-8331-b5ee-96610d76cf26 will see bids at first half
 https://chatgpt.com/c/68b6babc-4814-8330-846b-bc8915850ec4
+https://www.youtube.com/watch?v=QsH8FL0952k&t=1s
 
 
 Perfect summary — you’ve almost got it all pieced together 🎯
