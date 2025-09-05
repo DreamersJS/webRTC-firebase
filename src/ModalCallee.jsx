@@ -1,21 +1,26 @@
-
-const ModalCallee = ({onAccept, onReject, callData }) => {
-    const { callId, callerId, callerName } = callData
-
+export default function ModalCallee({ callData, onAccept, onReject }) {
     return (
-        <div>
-            Call from {callerName}
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex flex-col justify-center items-center z-50">
+        <div className="bg-white p-6 rounded-xl shadow-lg flex flex-col items-center gap-4">
+          <p className="text-lg font-semibold">
+            Incoming call from {callData.callerName}
+          </p>
+          <div className="flex gap-4">
             <button
-                onClick={onAccept}
+              className="px-4 py-2 bg-green-500 text-white rounded"
+              onClick={onAccept}
             >
-                Accept
+              Accept
             </button>
             <button
-                onClick={onReject}
+              className="px-4 py-2 bg-red-500 text-white rounded"
+              onClick={onReject}
             >
-                Reject
+              Reject
             </button>
+          </div>
         </div>
-    )
-}
-export default ModalCallee;
+      </div>
+    );
+  }
+  
