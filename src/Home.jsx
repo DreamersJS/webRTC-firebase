@@ -135,10 +135,20 @@ export default function Home() {
   };
 
   // Callee joins call
-  const handleJoinCall = async (callId) => {
-    pc.current = createPeerConnection();
-    await joinCall(pc.current, callId);
-  };
+// Callee joins call
+const handleJoinCall = async (callId) => {
+  pc.current = createPeerConnection();
+
+  // get local media and add tracks (callee video/audio)
+  const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  localStream.getTracks().forEach(track => pc.current.addTrack(track, localStream));
+
+  // attach local stream to UserVideo
+  setRemoteStream(localStream); // Optional: show own video in remote stream area
+
+  await joinCall(pc.current, callId);
+};
+
 
   // End call
   const handleEndCall = async () => {
@@ -187,8 +197,8 @@ export default function Home() {
           playsInline
           className="rounded-xl shadow-md"
           />
-          </div>
         {/* <RemoteVideo stream={remoteStream} /> */}
+          </div>
         <button onClick={handleEndCall}>End call</button>
       </div>
     </div>
