@@ -1,4 +1,4 @@
-// create STUN/TURN server - using free google STUN server
+// server.js
 const servers = {
     iceServers: [
         { urls: ["stun:stun.l.google.com:19302"] },
@@ -9,7 +9,7 @@ export function createPeerConnection() {
     return new RTCPeerConnection(servers);
 }
 
-export let peerConnection = new RTCPeerConnection(servers);
+let peerConnection = createPeerConnection();
 
 export const attachLocalStream = (stream) => {
     stream.getTracks().forEach((track) => {

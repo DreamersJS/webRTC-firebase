@@ -1,55 +1,71 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { AppContext } from "./login/AppContext";
 import UserVideo from "./UserVideo";
 import RemoteVideo from "./RemoteVideo";
-import { peerConnection } from "./server";
+import { listenForRemoteTracks, createPeerConnection } from "./server";
 import ListUsers from "./ListUsers";
 import ModalCallerCalling from "./ModalCallerCalling";
 import ModalCallee from "./ModalCallee";
 import { firstCallSetup, joinCall, startCall } from "./services";
-import { addAcceptCallToDb, addIncomingToDb, addRejectCallToDb, deleteTableRow, listenForCallStatus, listenForIncomingCall, removeIncoming } from "./firebaseFuncs";
-import {Login} from "./login/Login";
- 
-// login and store userData in context
-// Hello {user.username}
-// list of users + button to select user to call
-// on click of button, start call with that user, popup modal Calling Marty... Cancel call button
-// other user gets popup modal Incoming call from Andy Accept/Reject buttons
-// on accept, join call- both users see video call screen
+import {
+  addAcceptCallToDb,
+  addIncomingToDb,
+  addRejectCallToDb,
+  deleteTableRow,
+  listenForCallStatus,
+  listenForIncomingCall,
+  removeIncoming,
+} from "./firebaseFuncs";
+import { Login } from "./login/Login";
+
 export default function Home() {
   const { user } = useContext(AppContext);
+
   const [isCalling, setIsCalling] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [incomingCall, setIncomingCall] = useState(null); // { callId, callerId, callerName }
-  const [isCanceled, setIsCanceled] = useState(null);
-  const [isAccepted, setIsAccepted] = useState(null);
-  const [isRejected, setIsRejected] = useState(null);
-  // Add activeCall state to track if user is already in a call. Reject new calls automatically or queue them.
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [isCanceled, setIsCanceled] = useState(false);
+  const [isAccepted, setIsAccepted] = useState(false);
+  const [isRejected, setIsRejected] = useState(false);
 
+  const [remoteStream, setRemoteStream] = useState(null);
+  const videoRef = useRef(null);
+  const pc = useRef(null);
+
+  // Attach remote stream when available
   useEffect(() => {
-    console.log({ selectedUser, isCalling, incomingCall });
-  }, [selectedUser, isCalling, incomingCall]);
-  // useEffect(() => {
-  //   console.log(`user.uid ${ user.uid}, user.username ${user.username}`);
-  //   console.log({user});
-  // }, [user]);
+    if (videoRef.current && remoteStream) {
+      videoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
 
+  // Attach listener for remote tracks
+  useEffect(() => {
+    listenForRemoteTracks((stream) => setRemoteStream(stream));
+  }, []);
+
+  // Debug
+  useEffect(() => {
+    console.log({ isCalling, incomingCall });
+  }, [isCalling, incomingCall]);
+
+  // Subscribe to incoming calls
   useEffect(() => {
     if (!user?.uid) return;
-  
-    // Subscribe to incoming calls
+
     const unsubscribe = listenForIncomingCall(user.uid, (callData, callKey) => {
       console.log("Incoming call:", callData);
       setIncomingCall({
         ...callData,
         calleeId: user.uid,
-        key: callKey
+        key: callKey,
       });
     });
-  
-    return () => unsubscribe && unsubscribe(); // clean up listener on unmount
+
+    return () => unsubscribe && unsubscribe();
   }, [user?.uid]);
-  
+
+  // Handle cancel from caller side
   useEffect(() => {
     if (isCanceled) {
       handleEndCall();
@@ -59,6 +75,7 @@ export default function Home() {
     }
   }, [isCanceled]);
 
+  // Handle reject from callee side
   useEffect(() => {
     if (isRejected && incomingCall) {
       const rejectCall = async () => {
@@ -72,27 +89,36 @@ export default function Home() {
     }
   }, [isRejected, incomingCall]);
 
+  // Handle accept from callee side
   useEffect(() => {
     if (isAccepted && incomingCall) {
-      // join call logic
       const acceptCall = async () => {
-      await addAcceptCallToDb(incomingCall.calleeId, incomingCall.key);
-      handleJoinCall(incomingCall.callId);
-      setIncomingCall(null);
-      setIsAccepted(false);
-      }
+        await addAcceptCallToDb(incomingCall.calleeId, incomingCall.key);
+        await handleJoinCall(incomingCall.callId);
+        setIncomingCall(null);
+        setIsAccepted(false);
+      };
       acceptCall();
     }
   }, [isAccepted, incomingCall]);
 
+  // Caller starts a call
   const handleStartCall = async ({ id, username }) => {
     setSelectedUser({ id, username });
     setIsCalling(true);
-  
-    const callId = await startCall();
-  
-    const callKey = await addIncomingToDb(callId, user?.uid, user?.username, id);
-  
+
+    // create new peer connection
+    pc.current = createPeerConnection();
+
+    const callId = await startCall(pc.current);
+
+    const callKey = await addIncomingToDb(
+      callId,
+      user?.uid,
+      user?.username,
+      id
+    );
+
     // 👇 Caller listens for accept/reject
     const unsubscribe = listenForCallStatus(id, callKey, (status) => {
       if (status === true) {
@@ -100,54 +126,69 @@ export default function Home() {
         setIsCalling(false); // hide caller modal
       } else if (status === false) {
         console.log("Callee rejected");
-        setIsCalling(false); // hide caller modal
+        setIsCalling(false);
         setSelectedUser(null);
       }
     });
-  
-    // clean up listener on unmount or end
+
     return () => unsubscribe && unsubscribe();
-  };  
+  };
 
-  const handleJoinCall = async (callData) => {
-    await joinCall(callData);
-  }
+  // Callee joins call
+  const handleJoinCall = async (callId) => {
+    pc.current = createPeerConnection();
+    await joinCall(pc.current, callId);
+  };
 
+  // End call
   const handleEndCall = async () => {
     if (incomingCall) {
       await deleteTableRow(incomingCall.callId);
       removeIncoming(incomingCall.calleeId, incomingCall.key);
       setIncomingCall(null);
     }
-    // Close peerConnection tracks
-    peerConnection.getSenders().forEach(sender => sender.track.stop());
-    peerConnection.close();
-  }
+    if (pc.current) {
+      pc.current.getSenders().forEach((s) => s.track && s.track.stop());
+      pc.current.close();
+      pc.current = null;
+    }
+    setRemoteStream(null);
+  };
 
   return (
-    <div >
+    <div>
       <Login />
       <p>Hello {user?.username}!</p>
 
-      <ListUsers
-        onCall={handleStartCall}
-        selectedUser={selectedUser}
-      />
+      <ListUsers onCall={handleStartCall} selectedUser={selectedUser} />
 
-      {isCalling && selectedUser &&
+      {isCalling && selectedUser && (
         <ModalCallerCalling
           callee={selectedUser.username}
-          onCancel={() => setIsCanceled(true)} />}
+          onCancel={() => setIsCanceled(true)}
+        />
+      )}
 
-      {incomingCall && <ModalCallee
-        onAccept={() => setIsAccepted(true)}
-        onReject={() => setIsRejected(true)}
-        callData={incomingCall}
-      />}
+      {incomingCall && (
+        <ModalCallee
+          onAccept={() => setIsAccepted(true)}
+          onReject={() => setIsRejected(true)}
+          callData={incomingCall}
+        />
+      )}
 
       <div className="flex gap-4">
-        <UserVideo />
-        <RemoteVideo peerConnection={peerConnection} />
+        <UserVideo pc={pc} />
+        <div>
+          <p>Remote Video</p>
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          className="rounded-xl shadow-md"
+          />
+          </div>
+        {/* <RemoteVideo stream={remoteStream} /> */}
         <button onClick={handleEndCall}>End call</button>
       </div>
     </div>

@@ -1,24 +1,13 @@
 import { useEffect, useRef } from "react";
-import { listenForRemoteTracks, peerConnection } from "./server";
 
-export default function RemoteVideo() {
+export default function RemoteVideo({stream}) {
   const videoRef = useRef(null);
 
   useEffect(() => {
-    const handleRemoteTrack = (remoteStream) => {
-      if (videoRef.current) videoRef.current.srcObject = remoteStream;
-    };
-  
-    listenForRemoteTracks(handleRemoteTrack);
-  
-    return () => {
-      peerConnection.ontrack = null; // remove the listener
-      if (videoRef.current?.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-        videoRef.current.srcObject = null;
-      }
-    };
-  }, []);  
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
 
   return (
     <video

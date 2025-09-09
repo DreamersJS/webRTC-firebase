@@ -1,12 +1,11 @@
 import { addAnswerToDb, addIceCandidateToDb, addOfferToDb, createTable, createTableRow, getOfferFromDb, listenForAnswer, listenForIceCandidates } from "./firebaseFuncs";
-import { peerConnection } from "./server";
 
 // create table for calls db, "calls" on first call
 export const firstCallSetup = async () => {
-    const callsRef = await createTable();
+    await createTable();
 };
 
-export async function startCall() {
+export async function startCall(peerConnection) {
 
     // create db, `calls/${callId}` for this call and on end delete it
     // createTableRow returns callId
@@ -40,28 +39,26 @@ export async function startCall() {
     return callId;
 }
 
-export async function joinCall(callId) {
-
+export async function joinCall(peerConnection, callId) {
     // Get offer
     const offer = await getOfferFromDb(callId);
     await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-
+  
     // Create answer
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
-
+  
     await addAnswerToDb(callId, answer);
-
-    // Send callee ICE
+  
+    // Send Callee ICE to DB
     peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-            addIceCandidateToDb(callId, event.candidate, false);
-        }
+      if (event.candidate) {
+        addIceCandidateToDb(callId, event.candidate, false);
+      }
     };
-
+  
     // Listen for caller ICE
-    listenForIceCandidates(callId, true, async candidate => {
-        await peerConnection.addIceCandidate(candidate);
-    });    
-
-}
+    listenForIceCandidates(callId, true, async (candidate) => {
+      await peerConnection.addIceCandidate(candidate);
+    });
+  }
