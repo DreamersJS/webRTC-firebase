@@ -31,6 +31,7 @@ export default function Home() {
   const [remoteStream, setRemoteStream] = useState(null);
   const videoRef = useRef(null);
   const pc = useRef(null);
+  const [activeCall, setActiveCall] = useState(null); // { callId, calleeId, callerId, key }
 
   // Attach remote stream when available
   useEffect(() => {
@@ -95,6 +96,10 @@ export default function Home() {
       const acceptCall = async () => {
         await addAcceptCallToDb(incomingCall.calleeId, incomingCall.key);
         await handleJoinCall(incomingCall.callId);
+
+        // store active call so we can end it later
+        setActiveCall(incomingCall);
+
         setIncomingCall(null);
         setIsAccepted(false);
       };
@@ -135,35 +140,47 @@ export default function Home() {
   };
 
   // Callee joins call
-// Callee joins call
-const handleJoinCall = async (callId) => {
-  pc.current = createPeerConnection();
+  // Callee joins call
+  const handleJoinCall = async (callId) => {
+    pc.current = createPeerConnection();
 
-  // get local media and add tracks (callee video/audio)
-  const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  localStream.getTracks().forEach(track => pc.current.addTrack(track, localStream));
+    // get local media and add tracks (callee video/audio)
+    const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localStream.getTracks().forEach(track => pc.current.addTrack(track, localStream));
 
-  // attach local stream to UserVideo
-  setRemoteStream(localStream); // Optional: show own video in remote stream area
+    // attach local stream to UserVideo
+    setRemoteStream(localStream); // Optional: show own video in remote stream area
+    setSelectedUser(null)
 
-  await joinCall(pc.current, callId);
-};
+    await joinCall(pc.current, callId);
+  };
 
 
   // End call
   const handleEndCall = async () => {
-    if (incomingCall) {
-      await deleteTableRow(incomingCall.callId);
-      removeIncoming(incomingCall.calleeId, incomingCall.key);
-      setIncomingCall(null);
+    if (activeCall) {
+      await deleteTableRow(activeCall.callId);
+      if (activeCall.calleeId && activeCall.key) {
+        await removeIncoming(activeCall.calleeId, activeCall.key);
+      }
+      setActiveCall(null);
     }
+  
     if (pc.current) {
-      pc.current.getSenders().forEach((s) => s.track && s.track.stop());
+      pc.current.getSenders().forEach(s => s.track && s.track.stop());
       pc.current.close();
       pc.current = null;
     }
+  
     setRemoteStream(null);
+  
+    // ✅ clear local video so it doesn’t stay frozen
+    const localVideoEl = document.getElementById("localVideo");
+    if (localVideoEl) {
+      localVideoEl.srcObject = null;
+    }
   };
+  
 
   return (
     <div>
@@ -191,14 +208,14 @@ const handleJoinCall = async (callId) => {
         <UserVideo pc={pc} />
         <div>
           <p>Remote Video</p>
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          className="rounded-xl shadow-md"
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            className="rounded-xl shadow-md"
           />
-        {/* <RemoteVideo stream={remoteStream} /> */}
-          </div>
+          {/* <RemoteVideo stream={remoteStream} /> */}
+        </div>
         <button onClick={handleEndCall}>End call</button>
       </div>
     </div>
