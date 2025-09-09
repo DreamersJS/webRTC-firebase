@@ -1,20 +1,20 @@
-import { useEffect, useRef } from "react";
+import React, { forwardRef, useEffect } from "react";
 
-export default function RemoteVideo({stream}) {
-  const videoRef = useRef(null);
-
+const RemoteVideo = forwardRef(({ stream }, ref) => {
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+    if (ref?.current && stream) {
+      ref.current.srcObject = stream;
     }
-  }, [stream]);
+  }, [stream, ref]);
 
   return (
     <video
-      ref={videoRef}
+      ref={ref}
       autoPlay
       playsInline
-      className="rounded-xl shadow-md"
+      style={{ width: "300px", height: "200px", backgroundColor: "black" }}
     />
   );
-}
+});
+
+export default RemoteVideo;
