@@ -33,6 +33,7 @@ export const listenForAnswer = (callId, callback) => {
   onValue(ref(db, `calls/${callId}/answer`), async (snapshot) => {
     const answer = snapshot.val();
     if (answer) {
+      console.log("Answer received from DB:", answer);
       log("answerReceived", { callId, type: answer.type });
       callback(answer);
     }
@@ -68,8 +69,8 @@ export const addIceCandidateToDb = async (callId, candidate, isCaller) => {
     sdpMLineIndex: candidate.sdpMLineIndex,
     role: isCaller ? "caller" : "callee",
   });
-
   await push(ref(db, candidatePath), candidate.toJSON());
+  console.log("Adding ICE candidate to DB:", candidate, "at path:", candidatePath);
 };
 
 export const listenForIceCandidates = (callId, isCaller, callback) => {
@@ -78,14 +79,20 @@ export const listenForIceCandidates = (callId, isCaller, callback) => {
     : `calls/${callId}/callerCandidates`;
 
   log("listenForIceCandidates", { callId, path: candidatePath });
+  console.log("Listening for ICE candidates at path:", candidatePath);
 
   onChildAdded(ref(db, candidatePath), (snapshot) => {
     const candidate = snapshot.val();
+    
+    // Determine actual role of candidate from DB path
+    const candidateRole = isCaller ? "callee" : "caller";
+
     log("iceCandidateReceived", {
       callId,
       candidate: candidate?.candidate,
-      role: isCaller ? "caller" : "callee",
+      role: candidateRole, // <-- real candidate role
     });
+
     callback(new RTCIceCandidate(candidate));
   });
 };

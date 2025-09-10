@@ -47,6 +47,15 @@ export default function Home() {
   const handleEndCall = async () => {
     if (activeCall?.callId) {
       // remove call from Firebase
+      try {
+        if (isCallerRef.current) {
+          await removeIncoming(activeCall.calleeId, activeCall.key);
+        } else {
+          await removeIncoming(user.uid, activeCall.key);
+        }
+      } catch (err) {
+        console.error("❌ Failed to clean up call in DB:", err);
+      }
     }
     if (pc.current) {
       pc.current.getSenders().forEach((s) => s.track?.stop());
@@ -87,27 +96,43 @@ export default function Home() {
     isCallerRef.current = true;
 
     pc.current = new RTCPeerConnection();
+    // Get local media
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     setLocalStream(stream);
     stream.getTracks().forEach((t) => pc.current.addTrack(t, stream));
 
+    // Remote stream
     pc.current.ontrack = (e) => setRemoteStream(e.streams[0]);
+
+    // Create callId early so ICE can go straight to DB
+    const newCallId = await createTableRow();
+    setCallId(newCallId);
+    // flush caller ICE
+    for (let c of iceQueue.current) {
+      // addIceCandidateToDb = async (callId, candidate, isCaller)
+      if (c?.candidate) await addIceCandidateToDb(newCallId, c, true);
+    }
+    iceQueue.current = [];
+
+    // ICE candidates
     pc.current.onicecandidate = (e) => {
       if (e.candidate?.candidate) {
-        if (!callId) iceQueue.current.push(e.candidate);
-        else addIceCandidateToDb(callId, e.candidate, true);
+        // if (!callId) iceQueue.current.push(e.candidate);
+        // else addIceCandidateToDb(callId, e.candidate, true);
+        if (!e.candidate?.candidate) return;
+        addIceCandidateToDb(newCallId, e.candidate, true);
       }
     };
 
-    const newCallId = await createTableRow();
-    setCallId(newCallId);
-
+    // Create offer
     const offer = await pc.current.createOffer();
     await pc.current.setLocalDescription(offer);
     await addOfferToDb(newCallId, offer);
 
+    // Add yourself as incoming for callee
     const incomingKey = await addIncomingToDb(newCallId, user.uid, user.username, calleeId);
 
+    // Listen for answer and remote ICE
     listenForAnswer(newCallId, async (answer) => {
       if (!answer) return;
       await pc.current.setRemoteDescription(answer);
@@ -115,10 +140,13 @@ export default function Home() {
     });
 
     listenForIceCandidates(newCallId, true, async (candidate) => {
-      if (candidate?.candidate) {
-        if (!pc.current.remoteDescription) iceQueue.current.push(candidate);
-        else await pc.current.addIceCandidate(candidate).catch(console.warn);
-      }
+      // if (candidate?.candidate) {
+      //   if (!pc.current.remoteDescription) iceQueue.current.push(candidate);
+      //   else await pc.current.addIceCandidate(candidate).catch(console.warn);
+      // }
+      if (!candidate?.candidate) return;
+      if (!pc.current.remoteDescription) iceQueue.current.push(candidate);
+      else await pc.current.addIceCandidate(candidate).catch(console.warn);
     });
 
     setActiveCall({ callId: newCallId, calleeId, key: incomingKey });
@@ -131,36 +159,93 @@ export default function Home() {
     isCallerRef.current = false;
 
     pc.current = new RTCPeerConnection();
+
+    // 🎤 Get local stream
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     setLocalStream(stream);
     stream.getTracks().forEach((t) => pc.current.addTrack(t, stream));
 
+    // 📺 Remote stream
     pc.current.ontrack = (e) => setRemoteStream(e.streams[0]);
+
+    // ❄️ ICE candidates
     pc.current.onicecandidate = (e) => {
-      if (e.candidate?.candidate) {
-        if (!pc.current.remoteDescription) iceQueue.current.push(e.candidate);
-        else addIceCandidateToDb(cid, e.candidate, false);
+      // if (e.candidate?.candidate) {
+      //   if (!pc.current.remoteDescription) {
+      //     console.log("⏳ Queuing local ICE (callee)", e.candidate);
+      //     iceQueue.current.push(e.candidate);
+      //   } else {
+      //     addIceCandidateToDb(cid, e.candidate, false);
+      //   }
+      // }
+      if (!e.candidate?.candidate) return;
+      if (!pc.current.remoteDescription) {
+        iceQueue.current.push(e.candidate);
+      } else {
+        addIceCandidateToDb(cid, e.candidate, false);
       }
     };
 
-    const offer = await getOfferFromDb(cid);
-    await pc.current.setRemoteDescription(offer);
-
-    const answer = await pc.current.createAnswer();
-    await pc.current.setLocalDescription(answer);
-    await addAnswerToDb(cid, answer);
-
-    flushIceQueue();
-
-    listenForIceCandidates(cid, false, async (candidate) => {
-      if (candidate?.candidate) {
-        if (!pc.current.remoteDescription) iceQueue.current.push(candidate);
-        else await pc.current.addIceCandidate(candidate).catch(console.warn);
+    try {
+      // 🔁 Wait for offer in DB (retry up to 5x)
+      let offer = null;
+      for (let i = 0; i < 20; i++) {
+        offer = await getOfferFromDb(cid);
+        if (offer) break;
+        console.warn(`⏳ Offer not found yet, retrying... (${i + 1}/5)`);
+        await new Promise((res) => setTimeout(res, 500));
       }
-    });
+      if (!offer) throw new Error("❌ No offer found in DB after retries");
 
-    setActiveCall({ callId: cid, calleeId: user.uid, key });
-    setIncomingCall(null);
+      await pc.current.setRemoteDescription(offer);
+
+      const answer = await pc.current.createAnswer();
+      await pc.current.setLocalDescription(answer);
+      await addAnswerToDb(cid, answer);
+
+      // 🚀 Flush queued ICE after remote description is set
+      // flushIceQueue();
+      for (let c of iceQueue.current) {
+        if (c?.candidate) await pc.current.addIceCandidate(c).catch(console.warn);
+      }
+      iceQueue.current = [];
+
+      // 🔥 Listen for remote ICE from caller
+      // listenForIceCandidates(cid, false, async (candidate) => {
+      //   if (candidate?.candidate) {
+      //     if (!pc.current.remoteDescription) {
+      //       console.log("⏳ Queuing remote ICE (callee)", candidate);
+      //       iceQueue.current.push(candidate);
+      //     } else {
+      //       try {
+      //         await pc.current.addIceCandidate(candidate);
+      //       } catch (err) {
+      //         console.warn("⚠️ Failed to add ICE from caller:", err);
+      //       }
+      //     }
+      //   }
+      // });
+      listenForIceCandidates(cid, false, async (candidate) => {
+        if (!candidate?.candidate) return;
+        if (!pc.current.remoteDescription) {
+          iceQueue.current.push(candidate);
+        } else {
+          try {
+            await pc.current.addIceCandidate(candidate);
+          } catch (err) {
+            console.warn("Failed to add caller ICE:", err);
+          }
+        }
+      }); 
+
+      setActiveCall({ callId: cid, calleeId: user.uid, key });
+    } catch (err) {
+      console.error("❌ handleJoinCall failed:", err);
+      alert("Could not join the call. Please try again.");
+    } finally {
+      // ✅ Always close modal (even if error)
+      setIncomingCall(null);
+    }
   };
 
   return (
@@ -176,10 +261,29 @@ export default function Home() {
       {incomingCall && (
         <ModalCallee
           callData={incomingCall}
-          onAccept={() => handleJoinCall(incomingCall)}
+          onAccept={async () => {
+            try {
+              await handleJoinCall(incomingCall);
+              // setActiveCall((prev) => ({
+              //   ...prev,
+              //   calleeId: user.uid,
+              // }));
+              setIncomingCall(null); // ✅ only clear modal after success
+            } catch (err) {
+              console.error("❌ Failed to join call:", err);
+              alert("Joining failed, try again.");
+            }
+          }}
+
           onReject={async () => {
-            await removeIncoming(incomingCall.calleeId, incomingCall.key);
-            setIncomingCall(null);
+            try {
+              await addRejectCallToDb(incomingCall.callId, user.uid); // mark call rejected
+              await removeIncoming(user.uid, incomingCall.key);       // remove your incoming entry
+            } catch (err) {
+              console.error("❌ Failed to clean DB on reject:", err);
+            } finally {
+              setIncomingCall(null);
+            }
           }}
         />
       )}

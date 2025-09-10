@@ -5,6 +5,9 @@ import Home from './Home'
 import { Register } from './login/Register';
 import { Login } from './login/Login';
 
+// for access from other devices in the network like smartphone
+// npm run dev -- --host
+
 function App() {
   let { userId } = useParams();
 
