@@ -18,7 +18,10 @@ import {
   listenForIceCandidates,
   listenForIncomingCall,
 } from "./firebaseFuncs";
+import DebugLog from "./DebugLog";
 
+// WORKING
+// https://incomparable-bavarois-2e0fb3.netlify.app/
 export default function Home() {
   const { user } = useContext(AppContext);
 
@@ -293,6 +296,7 @@ export default function Home() {
         <RemoteVideo ref={remoteVideoRef} stream={remoteStream} />
         {activeCall && <button onClick={handleEndCall}>End call</button>}
       </div>
+      <DebugLog />
     </div>
   );
 }
